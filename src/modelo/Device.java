@@ -4,22 +4,36 @@ public class Device {
     private String ip;
     private String hostname;
     private boolean active;
-    private long responseTime; // en ms
+    private long responseTimeMs;
 
-    public Device(String ip, String hostname, boolean active, long responseTime) {
+    public Device(String ip, String hostname, boolean active, long responseTimeMs) {
         this.ip = ip;
         this.hostname = hostname;
         this.active = active;
-        this.responseTime = responseTime;
+        this.responseTimeMs = responseTimeMs;
     }
 
-    // Getters y Setters
-    public String getIp() { return ip; }
-    public String getHostname() { return hostname; }
-    public boolean isActive() { return active; }
-    public long getResponseTime() { return responseTime; }
+    public String getIp() { 
+        return ip; 
+    }
 
-    public void setHostname(String hostname) { this.hostname = hostname; }
-    public void setActive(boolean active) { this.active = active; }
-    public void setResponseTime(long responseTime) { this.responseTime = responseTime; }
+    public String getHostname() { 
+        return hostname; 
+    }
+
+    public boolean isActive() { 
+        return active; 
+    }
+
+    public long getResponseTime() { 
+        return responseTimeMs; 
+    }
+
+    public long getResponseTimeMs() { 
+        return responseTimeMs; 
+    }
+
+    public String getResponseTimeFormatted() {
+        return active ? responseTimeMs + " ms" : "N/A";
+    }
 }
