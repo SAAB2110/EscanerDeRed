@@ -1,5 +1,9 @@
 package vista;
 
+import modelo.Device;
+import controlador.EscanerRed;
+import utilidades.IpValidador;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -13,27 +17,31 @@ public class EscanerGui extends JFrame {
     private JTextField txtIpFin;
     private JTextField txtTimeout;
     private JButton btnEscanear;
+    private JButton btnDetener;
     private JTable tablaResultados;
     private DefaultTableModel modeloTabla;
     private JProgressBar progressBar;
     private JLabel lblEstado;
 
+    private ExecutorService executor;
+    private volatile boolean escaneoCancelado = false;
+
     public EscanerGui() {
-        setTitle("Escáner de Red Local - Rango y Latencia");
-        setSize(700, 450);
+        setTitle("Escáner de Red Local");
+        setSize(780, 450);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(10, 10));
 
-        // Panel Superior: Valores 192.168.1.x y Timeout
+        // Panel Superior: Entradas y Botones
         JPanel panelEntrada = new JPanel(new FlowLayout());
         
         panelEntrada.add(new JLabel("IP Inicio:"));
-        txtIpInicio = new JTextField("192.168.1.1", 10);
+        txtIpInicio = new JTextField("10.160.15.1", 10);
         panelEntrada.add(txtIpInicio);
 
         panelEntrada.add(new JLabel("IP Fin:"));
-        txtIpFin = new JTextField("192.168.1.30", 10);
+        txtIpFin = new JTextField("10.160.15.30", 10);
         panelEntrada.add(txtIpFin);
 
         panelEntrada.add(new JLabel("Timeout (ms):"));
@@ -41,17 +49,21 @@ public class EscanerGui extends JFrame {
         panelEntrada.add(txtTimeout);
 
         btnEscanear = new JButton("Escanear Rango");
+        btnDetener = new JButton("Detener");
+        btnDetener.setEnabled(false); // Inactivo hasta que empiece un escaneo
+
         panelEntrada.add(btnEscanear);
+        panelEntrada.add(btnDetener);
 
         add(panelEntrada, BorderLayout.NORTH);
 
-        // Tabla con 4 Columnas (incluye Tiempo de Respuesta)
-        String[] columnas = {"Dirección IP", "Hostname", "Estado", "Tiempo (ms)"};
+        // Tabla de Resultados
+        String[] columnas = {"Dirección IP", "Hostname", "Estado", "Tiempo de Respuesta"};
         modeloTabla = new DefaultTableModel(columnas, 0);
         tablaResultados = new JTable(modeloTabla);
         add(new JScrollPane(tablaResultados), BorderLayout.CENTER);
 
-        // Panel Inferior: Progreso y Estado
+        // Panel Inferior: Progreso
         JPanel panelInferior = new JPanel(new BorderLayout(5, 5));
         progressBar = new JProgressBar(0, 100);
         progressBar.setStringPainted(true);
@@ -62,6 +74,7 @@ public class EscanerGui extends JFrame {
         add(panelInferior, BorderLayout.SOUTH);
 
         btnEscanear.addActionListener(e -> ejecutarEscaneo());
+        btnDetener.addActionListener(e -> detenerEscaneo());
     }
 
     private void ejecutarEscaneo() {
@@ -69,7 +82,7 @@ public class EscanerGui extends JFrame {
         String ipFinStr = txtIpFin.getText().trim();
         String timeoutStr = txtTimeout.getText().trim();
 
-        if (!utilidades.IpValidador.esValida(ipInicioStr) || !utilidades.IpValidador.esValida(ipFinStr)) {
+        if (!IpValidador.esValida(ipInicioStr) || !IpValidador.esValida(ipFinStr)) {
             JOptionPane.showMessageDialog(this, "Formato de IP inválido.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -98,7 +111,10 @@ public class EscanerGui extends JFrame {
             return;
         }
 
+        // Estado inicial
         btnEscanear.setEnabled(false);
+        btnDetener.setEnabled(true);
+        escaneoCancelado = false;
         modeloTabla.setRowCount(0);
 
         int totalIps = (fin - inicio) + 1;
@@ -109,16 +125,20 @@ public class EscanerGui extends JFrame {
         lblEstado.setText(" Estado: Escaneando...");
 
         new Thread(() -> {
-            ExecutorService executor = Executors.newFixedThreadPool(25);
+            executor = Executors.newFixedThreadPool(25);
 
             for (int i = inicio; i <= fin; i++) {
+                if (escaneoCancelado) break;
+
                 final String ipAProbar = baseInicio + "." + i;
 
                 executor.submit(() -> {
-                    modelo.Device dev = controlador.EscanerRed.escanearIp(ipAProbar, timeout);
+                    if (escaneoCancelado) return;
 
-                    if (dev != null && dev.isActive()) {
-                        final modelo.Device devEncontrado = dev;
+                    Device dev = EscanerRed.escanearIp(ipAProbar, timeout);
+
+                    if (!escaneoCancelado && dev != null && dev.isActive()) {
+                        final Device devEncontrado = dev;
                         SwingUtilities.invokeLater(() -> {
                             modeloTabla.addRow(new Object[]{
                                 devEncontrado.getIp(),
@@ -130,20 +150,38 @@ public class EscanerGui extends JFrame {
                     }
 
                     int progreso = completadas.incrementAndGet();
-                    SwingUtilities.invokeLater(() -> progressBar.setValue(progreso));
+                    SwingUtilities.invokeLater(() -> {
+                        if (!escaneoCancelado) {
+                            progressBar.setValue(progreso);
+                        }
+                    });
                 });
             }
 
             executor.shutdown();
             while (!executor.isTerminated()) {
-                try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(50); } catch (InterruptedException ignored) {}
             }
 
             SwingUtilities.invokeLater(() -> {
-                lblEstado.setText(" Estado: Escaneo completado.");
+                if (escaneoCancelado) {
+                    lblEstado.setText(" Estado: Escaneo detenido por el usuario.");
+                } else {
+                    lblEstado.setText(" Estado: Escaneo completado.");
+                }
                 btnEscanear.setEnabled(true);
+                btnDetener.setEnabled(false);
             });
         }).start();
+    }
+
+    private void detenerEscaneo() {
+        escaneoCancelado = true;
+        if (executor != null) {
+            executor.shutdownNow(); // Cancela las tareas pendientes
+        }
+        btnDetener.setEnabled(false);
+        lblEstado.setText(" Estado: Deteniendo escaneo...");
     }
 
     public static void main(String[] args) {
