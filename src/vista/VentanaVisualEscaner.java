@@ -23,14 +23,16 @@ public class VentanaVisualEscaner extends JFrame {
     private JTable tablaResultados;
     private DefaultTableModel datosTabla;
     private JLabel lblEstadoTexto;
+    private JProgressBar barraProgreso;
 
     public VentanaVisualEscaner() {
         setTitle("Escáner de Red Local");
-        setSize(780, 420);
+        setSize(780, 450);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
 
+        // Panel superior de controles
         JPanel panelControles = new JPanel(new FlowLayout());
 
         panelControles.add(new JLabel("IP Inicio:"));
@@ -53,16 +55,27 @@ public class VentanaVisualEscaner extends JFrame {
 
         add(panelControles, BorderLayout.NORTH);
 
+        // Tabla central
         String[] columnas = {"Dirección IP", "Hostname", "Estado", "Tiempo de Respuesta"};
         datosTabla = new DefaultTableModel(columnas, 0);
         tablaResultados = new JTable(datosTabla);
         add(new JScrollPane(tablaResultados), BorderLayout.CENTER);
 
-        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Panel inferior con etiqueta de estado y barra de progreso
+        JPanel panelInferior = new JPanel(new BorderLayout(5, 5));
+        panelInferior.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+
         lblEstadoTexto = new JLabel("Estado: Listo para escanear.");
-        panelInferior.add(lblEstadoTexto);
+        barraProgreso = new JProgressBar(0, 100);
+        barraProgreso.setStringPainted(true); // Muestra el porcentaje % en la barra
+        barraProgreso.setValue(0);
+
+        panelInferior.add(lblEstadoTexto, BorderLayout.WEST);
+        panelInferior.add(barraProgreso, BorderLayout.EAST);
+
         add(panelInferior, BorderLayout.SOUTH);
 
+        // Listeners
         btnEscanear.addActionListener(e -> empezarEscaneo());
         btnGuardarTxt.addActionListener(e -> guardarEnDocumentos());
     }
@@ -101,26 +114,47 @@ public class VentanaVisualEscaner extends JFrame {
             return;
         }
 
+        // Configuración inicial del escaneo
         btnEscanear.setEnabled(false);
         datosTabla.setRowCount(0);
         lblEstadoTexto.setText("Estado: Escaneando red...");
+        
+        int totalIps = (numFin - numIni) + 1;
+        barraProgreso.setMinimum(0);
+        barraProgreso.setMaximum(totalIps);
+        barraProgreso.setValue(0);
 
-        for (int i = numIni; i <= numFin; i++) {
-            String ipActual = subredIni + "." + i;
-            DispositivoEncontrado dev = LogicaEscaner.probarIp(ipActual, timeoutVal);
+        // Hilo de escaneo en segundo plano
+        new Thread(() -> {
+            int progresoActual = 0;
 
-            if (dev != null && dev.isResponde()) {
-                datosTabla.addRow(new Object[]{
-                    dev.getIp(),
-                    dev.getHost(),
-                    "Alcanzable",
-                    dev.getTiempoFormateado()
+            for (int i = numIni; i <= numFin; i++) {
+                String ipActual = subredIni + "." + i;
+                DispositivoEncontrado dev = LogicaEscaner.probarIp(ipActual, timeoutVal);
+
+                progresoActual++;
+                final int paso = progresoActual;
+
+                // Actualizar interfaz desde el hilo principal de Swing
+                SwingUtilities.invokeLater(() -> {
+                    barraProgreso.setValue(paso);
+                    if (dev != null && dev.isResponde()) {
+                        datosTabla.addRow(new Object[]{
+                            dev.getIp(),
+                            dev.getHost(),
+                            "Alcanzable",
+                            dev.getTiempoFormateado()
+                        });
+                    }
                 });
             }
-        }
 
-        lblEstadoTexto.setText("Estado: Escaneo completado.");
-        btnEscanear.setEnabled(true);
+            // Al finalizar el bucle
+            SwingUtilities.invokeLater(() -> {
+                lblEstadoTexto.setText("Estado: Escaneo completado.");
+                btnEscanear.setEnabled(true);
+            });
+        }).start();
     }
 
     private void guardarEnDocumentos() {
