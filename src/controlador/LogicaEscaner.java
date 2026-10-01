@@ -15,18 +15,18 @@ public class LogicaEscaner {
 
             long demora = fin - inicio;
 
-            if (contesto && demora <= tiempoMaximo) {
+            if (contesto) {
                 String nombreEquipo = inet.getCanonicalHostName();
                 if (nombreEquipo.equalsIgnoreCase(ipAProbar)) {
                     nombreEquipo = "No resuelto";
                 }
-
                 return new DispositivoEncontrado(ipAProbar, nombreEquipo, true, demora);
+            } else {
+                return new DispositivoEncontrado(ipAProbar, "No alcanzable", false, 0);
             }
 
         } catch (Exception e) {
+            return new DispositivoEncontrado(ipAProbar, "No alcanzable", false, 0);
         }
-
-        return null;
     }
 }

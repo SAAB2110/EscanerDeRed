@@ -32,7 +32,6 @@ public class VentanaVisualEscaner extends JFrame {
         setLocationRelativeTo(null);
         setLayout(new BorderLayout(8, 8));
 
-        // Panel superior de controles
         JPanel panelControles = new JPanel(new FlowLayout());
 
         panelControles.add(new JLabel("IP Inicio:"));
@@ -55,19 +54,17 @@ public class VentanaVisualEscaner extends JFrame {
 
         add(panelControles, BorderLayout.NORTH);
 
-        // Tabla central
         String[] columnas = {"Dirección IP", "Hostname", "Estado", "Tiempo de Respuesta"};
         datosTabla = new DefaultTableModel(columnas, 0);
         tablaResultados = new JTable(datosTabla);
         add(new JScrollPane(tablaResultados), BorderLayout.CENTER);
 
-        // Panel inferior con etiqueta de estado y barra de progreso
         JPanel panelInferior = new JPanel(new BorderLayout(5, 5));
         panelInferior.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
         lblEstadoTexto = new JLabel("Estado: Listo para escanear.");
         barraProgreso = new JProgressBar(0, 100);
-        barraProgreso.setStringPainted(true); // Muestra el porcentaje % en la barra
+        barraProgreso.setStringPainted(true);
         barraProgreso.setValue(0);
 
         panelInferior.add(lblEstadoTexto, BorderLayout.WEST);
@@ -75,7 +72,6 @@ public class VentanaVisualEscaner extends JFrame {
 
         add(panelInferior, BorderLayout.SOUTH);
 
-        // Listeners
         btnEscanear.addActionListener(e -> empezarEscaneo());
         btnGuardarTxt.addActionListener(e -> guardarEnDocumentos());
     }
@@ -98,63 +94,70 @@ public class VentanaVisualEscaner extends JFrame {
             return;
         }
 
-        String subredIni = ipIni.substring(0, ipIni.lastIndexOf('.'));
-        String subredFin = ipFin.substring(0, ipFin.lastIndexOf('.'));
+        long lIpIni = ipToLong(ipIni);
+        long lIpFin = ipToLong(ipFin);
 
-        if (!subredIni.equalsIgnoreCase(subredFin)) {
-            JOptionPane.showMessageDialog(this, "Tienen que pertenecer a la misma red.", "Atención", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        int numIni = Integer.parseInt(ipIni.substring(ipIni.lastIndexOf('.') + 1));
-        int numFin = Integer.parseInt(ipFin.substring(ipFin.lastIndexOf('.') + 1));
-
-        if (numIni > numFin) {
+        if (lIpIni > lIpFin) {
             JOptionPane.showMessageDialog(this, "La IP inicial no puede ser mayor a la final.", "Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // Configuración inicial del escaneo
         btnEscanear.setEnabled(false);
         datosTabla.setRowCount(0);
         lblEstadoTexto.setText("Estado: Escaneando red...");
         
-        int totalIps = (numFin - numIni) + 1;
+        long totalIps = (lIpFin - lIpIni) + 1;
         barraProgreso.setMinimum(0);
-        barraProgreso.setMaximum(totalIps);
+        barraProgreso.setMaximum((int) totalIps);
         barraProgreso.setValue(0);
 
-        // Hilo de escaneo en segundo plano
         new Thread(() -> {
             int progresoActual = 0;
 
-            for (int i = numIni; i <= numFin; i++) {
-                String ipActual = subredIni + "." + i;
+            for (long i = lIpIni; i <= lIpFin; i++) {
+                String ipActual = longToIp(i);
                 DispositivoEncontrado dev = LogicaEscaner.probarIp(ipActual, timeoutVal);
 
                 progresoActual++;
                 final int paso = progresoActual;
 
-                // Actualizar interfaz desde el hilo principal de Swing
                 SwingUtilities.invokeLater(() -> {
                     barraProgreso.setValue(paso);
-                    if (dev != null && dev.isResponde()) {
+                    if (dev != null) {
+                        String estadoStr = dev.isResponde() ? "Alcanzable" : "No alcanzable";
+                        String latenciaStr = dev.isResponde() ? dev.getTiempoFormateado() : "-";
+                        
                         datosTabla.addRow(new Object[]{
                             dev.getIp(),
                             dev.getHost(),
-                            "Alcanzable",
-                            dev.getTiempoFormateado()
+                            estadoStr,
+                            latenciaStr
                         });
                     }
                 });
             }
 
-            // Al finalizar el bucle
             SwingUtilities.invokeLater(() -> {
                 lblEstadoTexto.setText("Estado: Escaneo completado.");
                 btnEscanear.setEnabled(true);
             });
         }).start();
+    }
+
+    private long ipToLong(String ipAddress) {
+        long result = 0;
+        String[] atoms = ipAddress.split("\\.");
+        for (int i = 0; i < 4; i++) {
+            result = (result << 8) + Integer.parseInt(atoms[i]);
+        }
+        return result;
+    }
+
+    private String longToIp(long ip) {
+        return ((ip >> 24) & 0xFF) + "." +
+               ((ip >> 16) & 0xFF) + "." +
+               ((ip >> 8) & 0xFF) + "." +
+               (ip & 0xFF);
     }
 
     private void guardarEnDocumentos() {
@@ -197,7 +200,7 @@ public class VentanaVisualEscaner extends JFrame {
                 }
 
                 pw.println("------------------------------------------------------------------");
-                pw.println("Total encontrados: " + datosTabla.getRowCount());
+                pw.println("Total evaluadas: " + datosTabla.getRowCount());
             }
 
             JOptionPane.showMessageDialog(this,
