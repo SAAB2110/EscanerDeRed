@@ -1,3 +1,3 @@
 @echo off
-start javaw -jar EscanerDeRed.jar
+java -jar EscanerDeRed.jar
 exit
