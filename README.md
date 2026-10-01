@@ -24,8 +24,19 @@ El código está organizado de manera limpia en cuatro partes:
 
 ---
 
-## Cómo Ejecutarlo
+## Cómo Ejecutarlo (Usuario Final)
 
-1. Abrir el proyecto en **VS Code** (o tu editor preferido con Java).
-2. Ejecutar el archivo `src/vista/EscanerGui.java`.
-3. Ingresar el rango de IP a escanear y presionar **Escanear Rango**.
+Para utilizar la aplicación de forma rápida y sencilla sin necesidad de instalar entornos de desarrollo ni compilar código:
+
+1. Ingresá a la sección de **Releases** de este repositorio en GitHub.
+2. Descargá el archivo ejecutable **`EscanerDeRed.jar`**.
+3. Hacé doble clic sobre el archivo descargado para abrir la aplicación al instante.
+
+---
+
+## Cómo Ejecutarlo (Desarrolladores / Código Fuente)
+
+Si querés revisar, modificar o compilar el código fuente:
+
+1. Abrir el proyecto en **VS Code** (o tu editor preferido con soporte para Java).
+2. Ejecutar la clase principal `App.java` o compilar utilizando el archivo `.bat` provisto en el repositorio.
